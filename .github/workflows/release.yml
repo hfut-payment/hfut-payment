@@ -42,6 +42,38 @@ jobs:
       - name: Prepare official wearable SDK
         if: github.ref_type == 'tag'
         run: bash scripts/fetch_wear_sdk.sh
+      - name: Read pinned wearable source revision
+        id: band
+        if: github.ref_type == 'tag'
+        run: |
+          pin=$(cat band-source.sha)
+          [[ "$pin" =~ ^[0-9a-f]{40}$ ]]
+          echo "pin=$pin" >> "$GITHUB_OUTPUT"
+      - name: Check out wearable source
+        if: github.ref_type == 'tag'
+        uses: actions/checkout@v5
+        with:
+          repository: hfut-payment/hfut-payment-band
+          ref: ${{ steps.band.outputs.pin }}
+          token: ${{ secrets.HFUT_BAND_READ_TOKEN || github.token }}
+          path: .sources/band
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        if: github.ref_type == 'tag'
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: .sources/band/package-lock.json
+      - name: Prepare wearable build dependencies
+        if: github.ref_type == 'tag'
+        working-directory: .sources/band
+        run: npm ci --ignore-scripts
+      - name: Build and verify embedded RPK from source
+        if: github.ref_type == 'tag'
+        env:
+          HFUT_SIGNING_P12_B64: ${{ secrets.HFUT_SIGNING_P12_B64 }}
+          CAMPUS_SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
+        run: node scripts/stage_band_rpk.mjs .sources/band release
       - name: Build and verify release
         if: github.ref_type == 'tag'
         env:
@@ -56,6 +88,11 @@ jobs:
           export CAMPUS_UPDATE_FEED="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/update.json"
           export CAMPUS_UPDATE_MIRROR="https://gitee.com/api/v5/repos/$GITEE_REPOSITORY/releases/latest"
           bash scripts/build_release.sh "$GITHUB_REF_NAME"
+          apk="dist/release/$GITHUB_REF_NAME/HFUT-Campus-Companion-${GITHUB_REF_NAME#v}.apk"
+          shopt -s nullglob
+          installers=(app/src/withBand/assets/HFUT-Campus-Band-*.rpk)
+          [[ "${#installers[@]}" == 1 ]]
+          unzip -p "$apk" "assets/${installers[0]##*/}" | cmp - "${installers[0]}"
       - name: Save verified release files
         if: github.ref_type == 'tag'
         uses: actions/upload-artifact@v4

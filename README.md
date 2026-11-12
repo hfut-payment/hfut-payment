@@ -20,17 +20,6 @@
 | 宿舍电费 | 照明与空调 | 常规用电与空调 |
 | 校园网和洗浴 | — | 流量额度、网费和洗浴余额 |
 
-<img src="docs/images/campus-fees.png" width="820" alt="校园付款与费用查询界面示意，金额为示例">
-
-<details>
-<summary>查看手机界面演示</summary>
-
-<img src="docs/images/home.png" width="275" alt="手机首页演示，付款码与余额来自离线测试数据">
-
-演示截图使用虚构的余额和测试码。
-
-</details>
-
 校园卡余额详情可以打开支付宝校园一卡通。宣城的电费、网费和洗浴详情支持用校园卡手动充值。
 
 ## 安装
@@ -54,6 +43,24 @@
 ./gradlew assembleDebug
 ~~~
 
-Windows 使用 .\gradlew.bat assembleDebug。默认源码构建可直接使用。需要可选穿戴功能时，可在 Bash 中运行 bash scripts/fetch_wear_sdk.sh，再重新构建。
+Windows 使用 `.\gradlew.bat assembleDebug`。默认构建无需小米 SDK 或手环安装包。
+
+<details>
+<summary>可选：从源码构建带手环功能的 APK</summary>
+
+需 Node.js 22 和 Bash（Windows 可用 Git Bash）。下面的命令从项目根目录运行：
+
+~~~sh
+git clone https://github.com/hfut-payment/hfut-payment-band.git .sources/band
+git -C .sources/band checkout --detach "$(cat band-source.sha)"
+(cd .sources/band && npm ci --ignore-scripts)
+bash scripts/fetch_wear_sdk.sh
+node scripts/stage_band_rpk.mjs .sources/band debug
+./gradlew assembleDebug
+~~~
+
+这样构建的 APK 可从「设置 → 小米手环」导出调试 RPK。调试签名不能覆盖已装的正式手环应用。正式发行工作流会用正式证书从同一份源码构建 RPK，验签后嵌入 APK。
+
+</details>
 
 维护者 [dustbin1415](https://github.com/dustbin1415)。工程整理与实现由 [OpenAI Codex](https://github.com/apps/chatgpt-codex-connector) 协助。源码按 [AGPL-3.0](LICENSE) 发布，第三方组件见 [许可说明](THIRD_PARTY_NOTICES.md)。

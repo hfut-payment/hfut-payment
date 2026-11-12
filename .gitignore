@@ -7,6 +7,8 @@
 /local.properties
 /vendor/xms-wearable-lib_1.4_release.aar
 /.local/
+/.sources/
+/app/src/withBand/assets/*.rpk
 .env
 .env.*
 *.apk
