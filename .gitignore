@@ -1,0 +1,17 @@
+/.gradle/
+/.idea/
+/.kotlin/
+/build/
+/app/build/
+/dist/
+/local.properties
+/vendor/xms-wearable-lib_1.4_release.aar
+/.local/
+.env
+.env.*
+*.apk
+*.p12
+*.jks
+*.key
+*.pem
+*.log

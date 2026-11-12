@@ -1,0 +1,98 @@
+name: Android release
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a version tag for each public main update
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.repository.private
+        run: |
+          version=$(sed -n 's/^versionName=//p' version.properties)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$ ]]
+          [[ "$(git rev-parse "refs/tags/v$version^{commit}")" == "$GITHUB_SHA" ]]
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Prepare Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+      - name: Check clean source build
+        if: github.ref_type != 'tag'
+        run: ./gradlew --no-daemon assembleDebug
+      - name: Prepare official wearable SDK
+        if: github.ref_type == 'tag'
+        run: bash scripts/fetch_wear_sdk.sh
+      - name: Build and verify release
+        if: github.ref_type == 'tag'
+        env:
+          HFUT_SIGNING_P12_B64: ${{ secrets.HFUT_SIGNING_P12_B64 }}
+          CAMPUS_SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
+          CAMPUS_USAGE_URL: ${{ vars.CAMPUS_USAGE_URL }}
+          CAMPUS_USAGE_PUBLISHABLE_KEY: ${{ vars.CAMPUS_USAGE_PUBLISHABLE_KEY }}
+          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
+        run: |
+          [[ "$GITHUB_REPOSITORY" == "hfut-payment/hfut-payment" ]]
+          [[ "$GITEE_REPOSITORY" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]
+          export CAMPUS_UPDATE_FEED="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/update.json"
+          export CAMPUS_UPDATE_MIRROR="https://gitee.com/api/v5/repos/$GITEE_REPOSITORY/releases/latest"
+          bash scripts/build_release.sh "$GITHUB_REF_NAME"
+      - name: Save verified release files
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: |
+            dist/release/${{ github.ref_name }}/HFUT-Campus-Companion-*.apk
+            dist/release/${{ github.ref_name }}/SHA256SUMS.txt
+            dist/release/${{ github.ref_name }}/update.json
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    concurrency:
+      group: public-android-distribution
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/publish_github.sh "$GITHUB_REF_NAME" release
+      - name: Publish same signed files to Gitee
+        env:
+          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
+          GITEE_USERNAME: ${{ vars.GITEE_USERNAME }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: bash scripts/publish_gitee.sh "$GITHUB_REF_NAME" release

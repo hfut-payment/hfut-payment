@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">payfor工大</string>
+    <string name="about_privacy_title">关于与隐私</string>
+    <string name="about_privacy_summary">查看版本、免责声明和隐私说明</string>
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_disclaimer_title">免责声明</string>
+    <string name="about_disclaimer">payfor工大由个人独立开发，是非官方校园卡工具，未获合肥工业大学授权或认可。\n\n余额、账单、扣款与到账结果以校园卡及相关支付服务的记录为准。若支付结果不明，请先核对账单，再决定是否重试。依法应承担的责任不受本说明影响。</string>
+    <string name="about_privacy_section">隐私说明</string>
+    <string name="about_accounts_title">账户与校园服务</string>
+    <string name="about_accounts">应用使用你提供的学号和校园卡密码登录校园卡。查询费用或充值时，会向相应服务提供所需的账户、宿舍或联系方式。部分校园服务的网络连接未加密。选择支付宝充值时，相关操作在支付宝内完成。\n\n费用查询设置和待核对的充值记录保存在这台手机。</string>
+    <string name="about_passwords_title">密码保存</string>
+    <string name="about_passwords">开启「记住密码」后，登录密码加密保存在这台手机。自动登录和部分后台功能需要记住密码。可在「账户管理」退出登录并删除已保存的登录密码。你在「充值设置」保存的支付密码也会加密存放在本机，可以在同一页面单独删除。</string>
+    <string name="about_sharing_title">设备互联与插件</string>
+    <string name="about_sharing">开启手环或背屏功能后，应用会向相应设备提供付款码，以及你选择显示的余额信息。启用的插件可按你授予的权限访问相关资料，可在「插件管理」查看和管理权限。</string>
+    <string name="about_usage_title">使用统计</string>
+    <string name="about_usage">每天首次打开应用时，会自动记录一次使用情况，用于了解每日使用量。统计服务可能记录网络地址，统计内容不包含学号、密码、付款码、余额或交易信息。</string>
+</resources>

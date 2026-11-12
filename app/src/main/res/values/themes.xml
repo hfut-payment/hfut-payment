@@ -1,0 +1,17 @@
+<resources>
+    <style name="Theme.Campus" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">#3C5DBA</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryContainer">#EAF0FF</item>
+        <item name="colorOnPrimaryContainer">#192337</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorSurfaceVariant">#F5F7FB</item>
+        <item name="colorOnSurface">#192337</item>
+        <item name="colorOnSurfaceVariant">#69758A</item>
+        <item name="colorOutline">#69758A</item>
+        <item name="colorOutlineVariant">#E1E7F0</item>
+        <item name="colorError">#B3261E</item>
+        <item name="android:windowBackground">#F5F7FB</item>
+        <item name="android:fontFamily">sans-serif</item>
+    </style>
+</resources>

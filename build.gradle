@@ -1,0 +1,17 @@
+plugins {
+    id 'com.android.application' version '8.13.2' apply false
+    id 'org.jetbrains.kotlin.android' version '2.2.21' apply false
+}
+
+configurations {
+    kotlinCli
+}
+
+dependencies {
+    kotlinCli 'org.jetbrains.kotlin:kotlin-compiler-embeddable:2.2.21'
+}
+
+tasks.register('prepareKotlinCli', Sync) {
+    from configurations.kotlinCli
+    into layout.buildDirectory.dir('kotlin-cli')
+}

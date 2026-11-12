@@ -1,0 +1,133 @@
+import java.security.MessageDigest
+
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def releaseVersion = new Properties()
+rootProject.file('version.properties').withInputStream { releaseVersion.load(it) }
+
+def localSettings = new Properties()
+def localSettingsFile = rootProject.file('local.properties')
+if (localSettingsFile.isFile()) localSettingsFile.withInputStream { localSettings.load(it) }
+def usageUrl = (providers.environmentVariable('CAMPUS_USAGE_URL').orNull ?: localSettings.getProperty('campus.usage.url', '')).trim()
+def usageKey = (providers.environmentVariable('CAMPUS_USAGE_PUBLISHABLE_KEY').orNull ?: localSettings.getProperty('campus.usage.publishableKey', '')).trim()
+def updateFeed = (providers.environmentVariable('CAMPUS_UPDATE_FEED').orNull ?: localSettings.getProperty('campus.update.feed', '')).trim()
+def updateMirror = (providers.environmentVariable('CAMPUS_UPDATE_MIRROR').orNull ?: localSettings.getProperty('campus.update.mirror', '')).trim()
+def wearSdkName = 'xms-wearable-lib_1.4_release.aar'
+def wearSdkPath = providers.environmentVariable('CAMPUS_WEAR_SDK').orNull
+def wearSdk = rootProject.file(wearSdkPath ?: "vendor/${wearSdkName}")
+if (wearSdkPath && !wearSdk.isFile()) throw new GradleException('CAMPUS_WEAR_SDK does not point to a file.')
+def withBand = wearSdk.isFile()
+if (updateFeed && !(updateFeed ==~ /https:\/\/[a-zA-Z0-9.-]+(?::[0-9]+)?(?:\/[a-zA-Z0-9._-]+)*\/update\.json/)) {
+    throw new GradleException('CAMPUS_UPDATE_FEED must be an HTTPS URL ending in /update.json.')
+}
+if (updateMirror && !(updateMirror ==~ /https:\/\/gitee\.com\/api\/v5\/repos\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+\/releases\/latest/)) {
+    throw new GradleException('CAMPUS_UPDATE_MIRROR must be a Gitee latest-release API URL.')
+}
+if ((usageUrl || usageKey) &&
+    (!(usageUrl ==~ /https:\/\/[a-z0-9]+\.supabase\.co/) || !(usageKey ==~ /sb_publishable_[A-Za-z0-9_-]+/))) {
+    throw new GradleException('Daily usage requires a Supabase project URL and a publishable key.')
+}
+
+def storePath = providers.environmentVariable('CAMPUS_SIGNING_STORE').orNull
+def storePasswordValue = providers.environmentVariable('CAMPUS_SIGNING_PASSWORD').orNull
+if ((storePath == null) != (storePasswordValue == null)) {
+    throw new GradleException('Set CAMPUS_SIGNING_STORE and CAMPUS_SIGNING_PASSWORD together.')
+}
+
+android {
+    namespace 'dev.codex.hfutcampus'
+    compileSdk 36
+    buildToolsVersion '35.0.0'
+    buildFeatures { buildConfig = true }
+
+    defaultConfig {
+        applicationId 'dev.codex.hfutcampus'
+        minSdk 26
+        targetSdk 35
+        versionCode releaseVersion.getProperty('versionCode').toInteger()
+        versionName releaseVersion.getProperty('versionName')
+        buildConfigField 'String', 'DAILY_USAGE_URL', '"' + usageUrl + '"'
+        buildConfigField 'String', 'DAILY_USAGE_KEY', '"' + usageKey + '"'
+        buildConfigField 'String', 'APP_UPDATE_FEED', '"' + updateFeed + '"'
+        buildConfigField 'String', 'APP_UPDATE_MIRROR', '"' + updateMirror + '"'
+        buildConfigField 'boolean', 'BAND_SUPPORTED', withBand.toString()
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    if (storePath != null) {
+        signingConfigs {
+            release {
+                storeFile rootProject.file(storePath)
+                storeType 'PKCS12'
+                storePassword storePasswordValue
+                keyAlias 'companion'
+                keyPassword storePasswordValue
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.release
+    }
+
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/paymentAssets'))
+    sourceSets.main.kotlin.srcDir(withBand ? 'src/withBand/kotlin' : 'src/withoutBand/kotlin')
+    if (withBand) sourceSets.main.assets.srcDir('src/withBand/assets')
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+    }
+}
+
+def zxing = rootProject.file('vendor/zxing-core-3.5.3.jar')
+def pinned = [(zxing): '8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82']
+if (withBand) pinned[wearSdk] = '9c40fd1c5409bb948523d503af71e2978ae522c35636afe7d64f474c0f6bc195'
+
+dependencies {
+    implementation 'androidx.javascriptengine:javascriptengine:1.1.1'
+    implementation 'com.google.android.material:material:1.14.0'
+    implementation files(pinned.keySet())
+}
+
+def checkPaymentInputs = tasks.register('checkPaymentInputs') {
+    doLast {
+        pinned.each { binary, expected ->
+            def digest = MessageDigest.getInstance('SHA-256').digest(binary.bytes).encodeHex().toString()
+            if (digest != expected) {
+                throw new GradleException("Dependency checksum mismatch: ${binary.name}")
+            }
+        }
+
+    }
+}
+
+def paymentAssets = tasks.register('syncPaymentAssets', Sync) {
+    into layout.buildDirectory.dir('generated/paymentAssets')
+    from(rootProject.file('licenses')) { into 'licenses' }
+    from rootProject.file('THIRD_PARTY_NOTICES.md')
+
+}
+
+tasks.named('preBuild') {
+    dependsOn checkPaymentInputs, paymentAssets
+}
+
+// The extension compiler uses this ABI. It is never an input to the APK.
+tasks.register('pluginHostApi', Jar) {
+    dependsOn 'compileReleaseKotlin'
+    archiveFileName = 'campus-plugin-api.jar'
+    destinationDirectory = layout.buildDirectory.dir('plugin-api')
+    from(tasks.named('compileReleaseKotlin').flatMap { it.destinationDirectory })
+    include 'dev/codex/hfutcampus/NativePlugin.class', 'dev/codex/hfutcampus/NativePlugin$*.class'
+    include 'dev/codex/hfutcampus/CardSnapshot.class', 'dev/codex/hfutcampus/BalanceSnapshot.class'
+    include 'dev/codex/hfutcampus/CampusRuntime.class', 'dev/codex/hfutcampus/CampusRuntime$Listener.class'
+    include 'dev/codex/hfutcampus/PaymentCodes*.class'
+    include 'dev/codex/hfutcampus/RearQrEncoder*.class', 'dev/codex/hfutcampus/RearBarcodeEncoder*.class'
+    include 'dev/codex/hfutcampus/CampusSheet.class', 'dev/codex/hfutcampus/BackgroundSupport.class'
+}
