@@ -6,6 +6,11 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      signed_candidate:
+        description: Build a signed candidate without publishing it
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,6 +23,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    env:
+      SIGNED_BUILD: ${{ github.ref_type == 'tag' || inputs.signed_candidate }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -35,22 +42,41 @@ jobs:
           java-version: '17'
           cache: gradle
       - name: Prepare Android SDK
-        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platforms;android-36 build-tools;35.0.0'
       - name: Check clean source build
-        if: github.ref_type != 'tag'
+        if: env.SIGNED_BUILD != 'true'
         run: ./gradlew --no-daemon assembleDebug
+      - name: Save debug APK
+        if: env.SIGNED_BUILD != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Verify signing configuration
+        if: env.SIGNED_BUILD == 'true'
+        env:
+          SIGNING_KEY: ${{ secrets.HFUT_SIGNING_P12_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
+        run: |
+          if [[ -z "$SIGNING_KEY" || -z "$SIGNING_PASSWORD" ]]; then
+            echo '::error::Configure HFUT_SIGNING_P12_B64 and HFUT_SIGNING_PASSWORD before building a signed candidate.'
+            exit 1
+          fi
       - name: Prepare official wearable SDK
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         run: bash scripts/fetch_wear_sdk.sh
       - name: Read pinned wearable source revision
         id: band
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         run: |
           pin=$(cat band-source.sha)
           [[ "$pin" =~ ^[0-9a-f]{40}$ ]]
           echo "pin=$pin" >> "$GITHUB_OUTPUT"
       - name: Check out wearable source
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         uses: actions/checkout@v5
         with:
           repository: hfut-payment/hfut-payment-band
@@ -59,23 +85,23 @@ jobs:
           path: .sources/band
           persist-credentials: false
       - uses: actions/setup-node@v4
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: .sources/band/package-lock.json
       - name: Prepare wearable build dependencies
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         working-directory: .sources/band
         run: npm ci --ignore-scripts
       - name: Build and verify embedded RPK from source
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         env:
           HFUT_SIGNING_P12_B64: ${{ secrets.HFUT_SIGNING_P12_B64 }}
           CAMPUS_SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
         run: node scripts/stage_band_rpk.mjs .sources/band release
       - name: Build and verify release
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         env:
           HFUT_SIGNING_P12_B64: ${{ secrets.HFUT_SIGNING_P12_B64 }}
           CAMPUS_SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
@@ -84,28 +110,36 @@ jobs:
           GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
         run: |
           [[ "$GITHUB_REPOSITORY" == "hfut-payment/hfut-payment" ]]
-          [[ "$GITEE_REPOSITORY" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]
+          version=$(sed -n 's/^versionName=//p' version.properties)
+          tag="v$version"
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            [[ "$GITHUB_REF_NAME" == "$tag" ]]
+            git merge-base --is-ancestor HEAD refs/remotes/origin/main
+          fi
           export CAMPUS_UPDATE_FEED="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/update.json"
-          export CAMPUS_UPDATE_MIRROR="https://gitee.com/api/v5/repos/$GITEE_REPOSITORY/releases/latest"
-          bash scripts/build_release.sh "$GITHUB_REF_NAME"
-          apk="dist/release/$GITHUB_REF_NAME/HFUT-Campus-Companion-${GITHUB_REF_NAME#v}.apk"
+          if [[ -n "$GITEE_REPOSITORY" ]]; then
+            [[ "$GITEE_REPOSITORY" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]
+            export CAMPUS_UPDATE_MIRROR="https://gitee.com/api/v5/repos/$GITEE_REPOSITORY/releases/latest"
+          fi
+          bash scripts/build_release.sh "$tag"
+          apk="dist/release/$tag/HFUT-Campus-Companion-$version.apk"
           shopt -s nullglob
           installers=(app/src/withBand/assets/HFUT-Campus-Band-*.rpk)
           [[ "${#installers[@]}" == 1 ]]
           unzip -p "$apk" "assets/${installers[0]##*/}" | cmp - "${installers[0]}"
       - name: Save verified release files
-        if: github.ref_type == 'tag'
+        if: env.SIGNED_BUILD == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-files
           path: |
-            dist/release/${{ github.ref_name }}/HFUT-Campus-Companion-*.apk
-            dist/release/${{ github.ref_name }}/SHA256SUMS.txt
-            dist/release/${{ github.ref_name }}/update.json
+            dist/release/*/HFUT-Campus-Companion-*.apk
+            dist/release/*/SHA256SUMS.txt
+            dist/release/*/update.json
           if-no-files-found: error
 
   publish:
-    if: github.ref_type == 'tag' && github.event_name != 'pull_request'
+    if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.repository.private
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -128,6 +162,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/publish_github.sh "$GITHUB_REF_NAME" release
       - name: Publish same signed files to Gitee
+        if: vars.GITEE_REPOSITORY != ''
         env:
           GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
           GITEE_USERNAME: ${{ vars.GITEE_USERNAME }}

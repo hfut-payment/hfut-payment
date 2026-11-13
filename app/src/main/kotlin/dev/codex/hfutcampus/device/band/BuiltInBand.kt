@@ -8,8 +8,8 @@ internal interface BandExtension : NativePlugin {
 
 internal object BuiltInBand {
     const val ID = "hfut.band"
-    const val VERSION = "2.0.6"
-    const val REVISION = 200106
+    const val VERSION = "2.0.7"
+    const val REVISION = 200107
     const val INSTALLER = "HFUT-Campus-Band-$VERSION.rpk"
     const val AVAILABLE = BuildConfig.BAND_SUPPORTED
     val bundle by lazy(PluginBundle::builtInBand)
