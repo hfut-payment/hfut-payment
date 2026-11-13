@@ -63,4 +63,19 @@ node scripts/stage_band_rpk.mjs .sources/band debug
 
 </details>
 
+## 发布新版本
+
+在组织仓库的本地副本中，将 `version.properties` 的 `versionName` 改为新版本，递增 `versionCode`，并提交审核过的改动。若同时更新手环快应用，先提交手环的新版本，再更新主应用里的 `band-source.sha` 和 `BuiltInBand` 版本。
+
+签名候选可在 [Actions](../../actions/workflows/release.yml) 的「Run workflow」勾选 `signed_candidate` 生成。用候选 APK 覆盖安装旧版，确认能正常启动后，再给准备发布的提交打标签。以当前候选 `2.0.20` 为例，在本地 `main` 分支上执行：
+
+~~~sh
+git status
+git log -1 --oneline
+git tag -a v2.0.20 -m "Release v2.0.20"
+git push --atomic origin main refs/tags/v2.0.20
+~~~
+
+仓库公开后，标签会触发正式构建。工作流验签后把 APK、校验文件和更新清单发布到 [Releases](../../releases)。仓库处于私有审核阶段时，候选包可从对应运行的「Artifacts」下载。
+
 第三方组件见 [许可说明](THIRD_PARTY_NOTICES.md)。
