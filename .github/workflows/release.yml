@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       signed_candidate:
-        description: Build a signed candidate without publishing it
+        description: Build a signed candidate from main without publishing it
         type: boolean
         default: false
 
@@ -25,27 +25,28 @@ jobs:
     timeout-minutes: 25
     outputs:
       signed: ${{ steps.release.outputs.signed }}
-    env:
-      SIGNED_BUILD: ${{ inputs.signed_candidate }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
       - name: Check signing configuration
-        if: github.ref_type == 'tag' || inputs.signed_candidate
+        if: >-
+          github.repository == 'hfut-payment/hfut-payment' &&
+          ((github.event_name == 'push' && github.ref_type == 'tag') || inputs.signed_candidate)
         env:
           SIGNING_KEY: ${{ secrets.HFUT_SIGNING_P12_B64 }}
           SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
         run: |
-          if [[ -n "$SIGNING_KEY" && -n "$SIGNING_PASSWORD" ]]; then
-            echo 'SIGNED_BUILD=true' >> "$GITHUB_ENV"
-          elif [[ -n "$SIGNING_KEY" || -n "$SIGNING_PASSWORD" || "$SIGNED_BUILD" == true ]]; then
-            echo '::error::Configure both Android signing secrets.'
+          [[ -n "$SIGNING_KEY" && -n "$SIGNING_PASSWORD" ]] || {
+            echo '::error::Set Actions secrets HFUT_SIGNING_P12_B64 and HFUT_SIGNING_PASSWORD to build a signed release.'
             exit 1
-          else
-            echo '::notice::Signing is local for this release. The tagged source is still built.'
+          }
+          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$GITHUB_REF" != refs/heads/main ]]; then
+            echo '::error::Select main for a signed candidate.'
+            exit 1
           fi
+          echo 'SIGNED_BUILD=true' >> "$GITHUB_ENV"
       - name: Require a version tag for each public main update
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.repository.private
         run: |
