@@ -60,37 +60,60 @@ internal data class AppRelease(
 
 class UpdateFileProvider : FileProvider()
 
+internal data class AppUpdateCheck(val release: AppRelease?, val hasPublishedRelease: Boolean = true)
+
+internal class UpdateHttpException(val status: Int) : IOException("HTTP $status")
+
+internal fun findGiteeStableRelease(latest: URI, read: (URI) -> String): JSONObject? {
+    val document = try {
+        read(latest).trim()
+    } catch (failure: UpdateHttpException) {
+        if (failure.status != 404) throw failure
+        "null"
+    }
+    if (document != "null") {
+        val release = JSONObject(document)
+        if (!release.getBoolean("prerelease")) return release
+    }
+
+    // Gitee can return a preview from /latest, or 404 before the first release.
+    val releases = JSONArray(read(latest.resolve(latest.path.removeSuffix("/latest"))))
+    return (0 until releases.length()).asSequence().map(releases::getJSONObject)
+        .firstOrNull { !it.getBoolean("prerelease") }
+}
+
 internal class AppUpdates(private val context: Context) {
     private val feed = BuildConfig.APP_UPDATE_FEED.takeIf(String::isNotEmpty)?.let(::URI)
     private val mirror = BuildConfig.APP_UPDATE_MIRROR.takeIf(String::isNotEmpty)?.let(::URI)
     val configured get() = feed != null || mirror != null
 
-    fun check(): AppRelease? {
+    fun check(): AppUpdateCheck {
         val checks = listOfNotNull(
             mirror?.let { url -> Callable { runCatching { checkGitee(url) } } },
             feed?.let { url -> Callable { runCatching { checkManifest(url) } } }
         )
         val results = sources.invokeAll(checks).map { it.get() }
         if (results.none { it.isSuccess }) throw IOException("Update feeds unavailable", results.firstOrNull()?.exceptionOrNull())
-        val available = results.mapNotNull { it.getOrNull() }
-        val latest = available.maxByOrNull { it.code } ?: return null
+        val completed = results.mapNotNull { it.getOrNull() }
+        val available = completed.mapNotNull { it.release }
+        val latest = available.maxByOrNull { it.code }
+            ?: return AppUpdateCheck(null, completed.any { it.hasPublishedRelease })
         val identity = latest.copy(downloads = emptyList())
-        return latest.copy(downloads = available.filter { it.copy(downloads = emptyList()) == identity }
-            .flatMap { it.downloads }.distinct())
+        return AppUpdateCheck(latest.copy(downloads = available.filter { it.copy(downloads = emptyList()) == identity }
+            .flatMap { it.downloads }.distinct()))
     }
 
     private fun checkManifest(url: URI) =
-        readRelease(url)?.let { it.copy(downloads = listOf(it.apkUrl(url))) }
+        AppUpdateCheck(readRelease(url)?.let { it.copy(downloads = listOf(it.apkUrl(url))) })
 
-    private fun checkGitee(latest: URI): AppRelease? {
-        val release = JSONObject(readText(latest))
-        require(!release.getBoolean("prerelease"))
+    private fun checkGitee(latest: URI): AppUpdateCheck {
+        val release = findGiteeStableRelease(latest, ::readText) ?: return AppUpdateCheck(null, false)
         val id = release.getLong("id").also { require(it > 0) }
         val assetsUri = latest.resolve("$id/attach_files")
         val assets = JSONArray(readText(assetsUri))
-        val update = readRelease(assetDownload(assetsUri, assets, "update.json")) ?: return null
+        val update = readRelease(assetDownload(assetsUri, assets, "update.json")) ?: return AppUpdateCheck(null)
         require(release.getString("tag_name") == "v${update.name}")
-        return update.copy(downloads = listOf(assetDownload(assetsUri, assets, update.apkName)))
+        return AppUpdateCheck(update.copy(downloads = listOf(assetDownload(assetsUri, assets, update.apkName))))
     }
 
     private fun assetDownload(list: URI, assets: JSONArray, name: String): URI {
@@ -211,7 +234,7 @@ internal class AppUpdates(private val context: Context) {
                         val location = connection.getHeaderField("Location") ?: throw IOException("Missing redirect")
                         url = url.resolve(location)
                     }
-                    else -> throw IOException("HTTP $status")
+                    else -> throw UpdateHttpException(status)
                 }
             } finally {
                 connection.disconnect()

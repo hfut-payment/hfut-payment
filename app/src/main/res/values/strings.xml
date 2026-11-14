@@ -1,15 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">payfor工大</string>
-    <string name="launcher_icon_title">桌面图标彩蛋</string>
-    <string name="launcher_icon_expand">展开%1$s</string>
-    <string name="launcher_icon_collapse">收起%1$s</string>
-    <string name="launcher_icon_preview">当前桌面图标</string>
-    <string name="launcher_icon_detail">随机换一组楼体里的二维码纹样。它是装饰图案，返回桌面后可能需要等一会儿才会更新。</string>
-    <string name="launcher_icon_shuffle">随机换一个</string>
-    <string name="launcher_icon_restore">恢复默认</string>
-    <string name="launcher_icon_changed">已切换桌面图标</string>
-    <string name="launcher_icon_error">暂时无法切换桌面图标，请重试</string>
     <string name="about_privacy_title">关于与隐私</string>
     <string name="about_privacy_summary">查看版本、免责声明和隐私说明</string>
     <string name="about_version">版本 %1$s</string>

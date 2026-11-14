@@ -1237,7 +1237,6 @@ class MainActivity : Activity() {
         val app = section(panel, "应用")
         updateSettingsSummary = settingRow(app, "refresh", "应用更新", appUpdatePage.summary,
             false, Runnable {}, appUpdatePage::show)
-        app.addView(LauncherIconSettings.create(this))
         var version: String? = ""
         try {
             version = getPackageManager().getPackageInfo(getPackageName(), 0).versionName
