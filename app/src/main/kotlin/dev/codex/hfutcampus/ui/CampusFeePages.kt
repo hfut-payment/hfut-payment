@@ -671,41 +671,49 @@ class CampusFeePages(private val activity: MainActivity, private val runtime: Ca
 
     private fun selectXc(chosen: (String, String, String) -> Unit) {
         val buildings = activity.sheet("选择楼栋", "按宿舍楼的名称选择。")
-        for (b in 1..10) buildings.row("power", CampusFees.xcBuilding(b), "", false, false) {
+        for (building in 1..10) buildings.row("power", CampusFees.xcBuilding(building), "", false, false) {
             buildings.dismiss()
-            val sides = activity.sheet("选择南楼或北楼", CampusFees.xcBuilding(b))
-            for (south in listOf(true, false)) sides.row("power", if (south) "南楼" else "北楼", "", false, false) {
-                sides.dismiss()
-                val room = activity.sheet("选择寝室", CampusFees.xcBuilding(b) + if (south) " / 南楼" else " / 北楼")
-                var digits = ""
-                val shown = room.paragraph("请选择三位寝室号", CampusUi.MUTED)
-                fun display() { shown.text = digits.ifEmpty { "请选择三位寝室号" } }
-                listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("清空", "0", "退格")).forEach { keys ->
-                    val row = CampusUi.row(activity)
-                    keys.forEachIndexed { i, key ->
-                        row.addView(button(key, false) {
-                            digits = when (key) {
-                                "清空" -> ""
-                                "退格" -> digits.dropLast(1)
-                                else -> if (digits.length < 3) digits + key else digits
-                            }
-                            display()
-                        }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = dp(8) })
-                    }
-                    place(room.body, row, 8)
+            if (!CampusFees.xcHasWings(building)) {
+                selectXcRoom(building, true, chosen)
+            } else {
+                val sides = activity.sheet("选择南楼或北楼", CampusFees.xcBuilding(building))
+                for (south in listOf(true, false)) sides.row("power", if (south) "南楼" else "北楼", "", false, false) {
+                    sides.dismiss()
+                    selectXcRoom(building, south, chosen)
                 }
-                room.action("确定", true, false) {
-                    val id = CampusFees.xcRoom(b, digits, south)
-                    if (id.isNotEmpty()) {
-                        chosen(id, "", CampusFees.xcRoomLabel(id))
-                        room.dismiss()
-                    } else shown.text = "还需要选满三位寝室号"
-                }
-                room.show()
+                sides.show()
             }
-            sides.show()
         }
         buildings.show()
+    }
+
+    private fun selectXcRoom(building: Int, south: Boolean, chosen: (String, String, String) -> Unit) {
+        val room = activity.sheet("选择寝室", CampusFees.xcBuildingLabel(building, south))
+        var digits = ""
+        val hint = "请选择三位寝室号"
+        val shown = room.paragraph(hint, CampusUi.MUTED)
+        listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("清空", "0", "退格")).forEach { keys ->
+            val row = CampusUi.row(activity)
+            keys.forEachIndexed { i, key ->
+                row.addView(button(key, false) {
+                    digits = when (key) {
+                        "清空" -> ""
+                        "退格" -> digits.dropLast(1)
+                        else -> if (digits.length < 3) digits + key else digits
+                    }
+                    shown.text = digits.ifEmpty { hint }
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (i > 0) leftMargin = dp(8) })
+            }
+            place(room.body, row, 8)
+        }
+        room.action("确定", true, false) {
+            val id = CampusFees.xcRoom(building, digits, south)
+            if (id.isNotEmpty()) {
+                chosen(id, "", CampusFees.xcRoomLabel(id))
+                room.dismiss()
+            } else shown.text = "还需要选满三位寝室号"
+        }
+        room.show()
     }
 
     private fun hefeiDirectory(

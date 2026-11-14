@@ -22,7 +22,8 @@ internal object CampusFeeProfile {
         val campus = campusOverride ?: current
         fun read(key: String) = stored.getString("$campus.$key", null)
             ?: if (campus == current) stored.getString(key, "").orEmpty() else ""
-        val room = read("room")
+        val storedRoom = read("room")
+        val room = if (campus == "xc") CampusFees.normalizeXcRoom(storedRoom) else storedRoom
         val building = read("building")
         val label = if (campus == "xc") CampusFees.xcRoomLabel(room) else read("roomLabel")
         fun meter(building: String, room: String) = if (building.isNotEmpty() && room.isNotEmpty()) {

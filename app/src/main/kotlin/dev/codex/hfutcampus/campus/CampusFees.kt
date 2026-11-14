@@ -52,7 +52,7 @@ object CampusFees {
         fun meter(ac: Boolean): String = when {
             hefeiMeters != null -> hefeiMeters.get(ac)?.room.orEmpty()
             hefei() -> if (ac) "" else room
-            xcCode.matches(room) -> room.dropLast(1) + if (ac) "2" else "1"
+            xcCode.matches(room) -> normalizeXcRoom(room).dropLast(1) + if (ac) "2" else "1"
             else -> ""
         }
 
@@ -167,18 +167,31 @@ object CampusFees {
     private val xcCode = Regex("300([1-9]|10)([0-9]{3})([12])[12]")
     private val choiceId = Regex("[A-Za-z0-9_-]{1,80}")
 
+    fun xcHasWings(building: Int): Boolean = building != 7 && building != 8
+
     fun xcRoom(building: Int, number: String, south: Boolean): String =
         if (building in 1..10 && number.matches(Regex("[0-9]{3}"))) {
-            "300" + building + number + if (south) "11" else "21"
+            "300" + building + number + if (south || !xcHasWings(building)) "11" else "21"
         } else ""
+
+    fun normalizeXcRoom(room: String): String {
+        val parts = xcCode.matchEntire(room)?.groupValues ?: return room
+        return if (xcHasWings(parts[1].toInt()) || parts[3] == "1") room
+            else room.replaceRange(room.length - 2, room.length - 1, "1")
+    }
 
     fun xcRoomLabel(room: String): String {
         val parts = xcCode.matchEntire(room)?.groupValues ?: return ""
-        val side = if (parts[3] == "1") "南楼" else "北楼"
-        return "${xcBuilding(parts[1].toInt())} / $side / ${parts[2]}"
+        return "${xcBuildingLabel(parts[1].toInt(), parts[3] == "1")} / ${parts[2]}"
     }
 
     fun xcBuilding(building: Int) = (if (building <= 5) "北区" else "南区") + building + "号楼"
+
+    fun xcBuildingLabel(building: Int, south: Boolean) = xcBuilding(building) + when {
+        !xcHasWings(building) -> ""
+        south -> " / 南楼"
+        else -> " / 北楼"
+    }
 
     @JvmStatic fun roomFields(building: String): Map<String, String> =
         linkedMapOf("type" to "select", "feeitemid" to "1", "campus" to "1sh",
