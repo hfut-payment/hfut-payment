@@ -8,7 +8,7 @@ files=${2:?Release artifact directory is required}
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
 version=${tag#v}
-assets=("HFUT-Campus-Companion-$version.apk" SHA256SUMS.txt update.json "HFUT-Campus-Companion-$version-source.zip")
+assets=(SHA256SUMS.txt update.json "HFUT-Campus-Companion-$version-source.zip" "HFUT-Campus-Companion-$version.apk")
 for asset in "${assets[@]}"; do
   [[ -s "$files/$asset" ]]
 done
@@ -43,7 +43,7 @@ for asset in "${assets[@]}"; do
   if [[ -z "$attached" ]]; then
     [[ "$prerelease" == true ]] || { printf 'Published Gitee release is missing %s.\n' "$asset" >&2; exit 1; }
     printf 'Uploading %s (%s bytes)\n' "$asset" "$(wc -c < "$files/$asset")"
-    "${http[@]}" --http1.1 --fail --request POST "$attachments" --header 'Expect:' \
+    "${http[@]}" --http1.1 --fail --request POST "$attachments" --header 'Expect:' --limit-rate 192k \
       --form "access_token=$GITEE_TOKEN" --form "file=@$files/$asset" \
       --output /dev/null --write-out 'Gitee upload HTTP %{response_code}, sent %{size_upload} bytes\n'
     attached=$("${http[@]}" --fail "$attachments" | jq -r --arg name "$asset" \
