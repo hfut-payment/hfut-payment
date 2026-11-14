@@ -140,7 +140,7 @@ jobs:
             dist/release/${{ steps.release.outputs.tag }}/update.json
           if-no-files-found: error
 
-  publish:
+  stage-release:
     if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.repository.private
     needs: build
     runs-on: ubuntu-24.04
@@ -159,14 +159,7 @@ jobs:
         with:
           name: release-files
           path: release
-      - name: Publish GitHub release
+      - name: Prepare GitHub release draft
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/publish_github.sh "$GITHUB_REF_NAME" release
-      - name: Publish same signed files to Gitee
-        if: vars.GITEE_REPOSITORY != ''
-        env:
-          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
-          GITEE_USERNAME: ${{ vars.GITEE_USERNAME }}
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-        run: bash scripts/publish_gitee.sh "$GITHUB_REF_NAME" release

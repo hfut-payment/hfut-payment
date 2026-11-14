@@ -1,0 +1,54 @@
+name: Sync stable Android release to Gitee
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Latest published stable tag to retry, for example v2.0.20
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitee-android-distribution
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: >-
+      github.repository == 'hfut-payment/hfut-payment' &&
+      !github.event.repository.private &&
+      vars.GITEE_REPOSITORY != '' &&
+      ((github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'build-tools;35.0.0'
+      - name: Download and verify the released files from GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/prepare_gitee_release.sh "$RELEASE_TAG" release
+      - name: Publish the same files to Gitee
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: bash scripts/publish_gitee.sh "$RELEASE_TAG" release

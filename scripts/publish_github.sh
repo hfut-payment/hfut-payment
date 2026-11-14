@@ -28,9 +28,5 @@ for asset in "$apk" SHA256SUMS.txt update.json; do
   fi
 done
 if [[ "$draft" == true ]]; then
-  if [[ "$tag" == *-* ]]; then
-    gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
-  else
-    gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-  fi
+  printf 'Release draft %s is ready for review. Publish it from GitHub Releases.\n' "$tag"
 fi
