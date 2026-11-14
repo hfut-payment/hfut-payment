@@ -486,9 +486,14 @@ class CampusFeePages(private val activity: MainActivity, private val runtime: Ca
             place(root, button("登录校园卡", true, activity::showFeeAccount), 14)
         }
         if (kind == CampusFees.Kind.CARD && runtime.isConfigured) {
-            option(root, "receipt", "查看账单", "校园卡交易流水") { source ->
-                CampusBillPage(activity, runtime, nav).open(source)
+            val bills = panel(root, "查看账单") { header ->
+                header.addView(CampusUi.icon(activity, "chevron", CampusUi.MUTED),
+                    LinearLayout.LayoutParams(dp(18), dp(18)))
             }
+            bills.background = CampusUi.ripple(activity, CampusUi.WHITE, 24f)
+            bills.isFocusable = true
+            bills.setOnClickListener { source -> CampusBillPage(activity, runtime, nav).open(source) }
+            paragraph(bills, "消费、充值与退款记录")
         }
         if (hefeiElectric) return
         val actions = LocalPlugins.get(activity).list().mapNotNull { plugin ->
