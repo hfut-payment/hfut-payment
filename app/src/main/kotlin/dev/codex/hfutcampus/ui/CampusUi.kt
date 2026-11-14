@@ -280,6 +280,11 @@ internal object CampusUi {
                 p.cubicTo(15.5f, 21f, 18.5f, 18.5f, 18.5f, 15f)
                 p.cubicTo(18.5f, 11f, 14f, 8f, 12f, 3f)
                 p.close()
+            } else if (kind == "receipt") {
+                canvas.drawRoundRect(5f, 3f, 19f, 21f, 2f, 2f, paint)
+                canvas.drawLine(9f, 8f, 15f, 8f, paint)
+                canvas.drawLine(9f, 12f, 15f, 12f, paint)
+                canvas.drawLine(9f, 16f, 13f, 16f, paint)
             } else if (kind == "trash") {
                 canvas.drawRoundRect(6f, 7f, 18f, 21f, 2f, 2f, paint)
                 p.moveTo(4f, 6f)

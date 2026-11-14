@@ -273,6 +273,13 @@ class CampusApi(private val transport: Transport, private val clock: Clock) {
         return rooms(feeRequest("POST", "/charge/feeitem/getThirdData", roomFields(building)))
     }
 
+    @Synchronized
+    internal fun queryBills(page: Int): CampusBills.Page {
+        require(page in 1..CampusBills.MAX_PAGE)
+        val fields = mapOf("current" to page.toString(), "size" to CampusBills.PAGE_SIZE.toString())
+        return CampusBills.parse(feeRequest("GET", CampusBills.PATH, fields), page)
+    }
+
     @Throws(Failure::class)
     private fun feeRequest(
         method: String,
@@ -327,7 +334,7 @@ class CampusApi(private val transport: Transport, private val clock: Clock) {
             var connection: HttpURLConnection? = null
             try {
                 val query = LinkedHashMap<String, String>()
-                query.put("synAccessSource", "app")
+                query.put("synAccessSource", if (path == CampusBills.PATH) "h5" else "app")
                 if (method == "GET") query.putAll(values)
                 val url = URL("http://121.251.19.62" + path + "?" + encode(query))
                 connection = url.openConnection() as HttpURLConnection?

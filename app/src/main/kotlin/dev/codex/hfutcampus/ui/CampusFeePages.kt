@@ -485,6 +485,11 @@ class CampusFeePages(private val activity: MainActivity, private val runtime: Ca
         if (!runtime.isConfigured) {
             place(root, button("登录校园卡", true, activity::showFeeAccount), 14)
         }
+        if (kind == CampusFees.Kind.CARD && runtime.isConfigured) {
+            option(root, "receipt", "查看账单", "校园卡交易流水") { source ->
+                CampusBillPage(activity, runtime, nav).open(source)
+            }
+        }
         if (hefeiElectric) return
         val actions = LocalPlugins.get(activity).list().mapNotNull { plugin ->
             plugin.feeShortcut(kind.key)?.takeIf { LocalPlugins.get(activity).active(plugin) }?.let { plugin to it }

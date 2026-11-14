@@ -708,6 +708,21 @@ class CampusRuntime {
         })
     }
 
+    internal fun requestBills(page: Int, completion: (Result<CampusBills.Page>) -> Unit) {
+        val expected = configurationRevision()
+        worker.execute {
+            val result = runCatching {
+                check(expected == configurationRevision() && isConfigured && canFetch()) { "请先登录校园卡" }
+                api.queryBills(page)
+            }
+            (result.exceptionOrNull() as? CampusApi.Failure)?.let { sessionLost(expected, it.kind) }
+            main.post {
+                if (expected == configurationRevision() && isConfigured) completion(result)
+                else completion(Result.failure(IllegalStateException("请重新登录校园卡后查看账单")))
+            }
+        }
+    }
+
     internal fun requestRooms(building: String, completion: RoomCompletion) {
         val expected = configurationRevision()
         worker.execute(Runnable {
