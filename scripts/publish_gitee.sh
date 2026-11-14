@@ -62,9 +62,13 @@ for asset in "${assets[@]}"; do
   attached=$(attachment_id "$asset" <<< "$listed")
   if [[ -z "$attached" ]]; then
     [[ "$prerelease" == true ]] || { printf 'Published Gitee release is missing %s.\n' "$asset" >&2; exit 1; }
+    upload_timeout=100
+    # The runner's route to Gitee can sustain only about 15 KiB/s for APKs.
+    if [[ "$asset" == *.apk ]]; then upload_timeout=600; fi
     for attempt in 1 2; do
       printf 'Uploading %s (%s bytes), attempt %s\n' "$asset" "$(wc -c < "$files/$asset")" "$attempt"
-      "${http[@]}" --http1.1 --request POST "$attachments" --header 'Expect:' --limit-rate 192k \
+      "${http[@]}" --max-time "$upload_timeout" --speed-limit 1024 --speed-time 45 \
+        --http1.1 --request POST "$attachments" --header 'Expect:' --limit-rate 192k \
         --form "access_token=$GITEE_TOKEN" --form "file=@$files/$asset" \
         --output /dev/null --write-out 'Gitee upload HTTP %{response_code}, sent %{size_upload} bytes\n' || true
       # The server may save the upload even if its response is lost.
