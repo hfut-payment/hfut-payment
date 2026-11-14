@@ -23,13 +23,29 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    outputs:
+      signed: ${{ steps.release.outputs.signed }}
     env:
-      SIGNED_BUILD: ${{ github.ref_type == 'tag' || inputs.signed_candidate }}
+      SIGNED_BUILD: ${{ inputs.signed_candidate }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Check signing configuration
+        if: github.ref_type == 'tag' || inputs.signed_candidate
+        env:
+          SIGNING_KEY: ${{ secrets.HFUT_SIGNING_P12_B64 }}
+          SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
+        run: |
+          if [[ -n "$SIGNING_KEY" && -n "$SIGNING_PASSWORD" ]]; then
+            echo 'SIGNED_BUILD=true' >> "$GITHUB_ENV"
+          elif [[ -n "$SIGNING_KEY" || -n "$SIGNING_PASSWORD" || "$SIGNED_BUILD" == true ]]; then
+            echo '::error::Configure both Android signing secrets.'
+            exit 1
+          else
+            echo '::notice::Signing is local for this release. The tagged source is still built.'
+          fi
       - name: Require a version tag for each public main update
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && !github.event.repository.private
         run: |
@@ -64,16 +80,6 @@ jobs:
           name: android-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-      - name: Verify signing configuration
-        if: env.SIGNED_BUILD == 'true'
-        env:
-          SIGNING_KEY: ${{ secrets.HFUT_SIGNING_P12_B64 }}
-          SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
-        run: |
-          if [[ -z "$SIGNING_KEY" || -z "$SIGNING_PASSWORD" ]]; then
-            echo '::error::Configure HFUT_SIGNING_P12_B64 and HFUT_SIGNING_PASSWORD before building a signed candidate.'
-            exit 1
-          fi
       - name: Prepare official wearable SDK
         if: env.SIGNED_BUILD == 'true'
         run: bash scripts/fetch_wear_sdk.sh
@@ -129,7 +135,7 @@ jobs:
           export CAMPUS_UPDATE_FEED="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/update.json"
           if [[ -n "$GITEE_REPOSITORY" ]]; then
             [[ "$GITEE_REPOSITORY" =~ ^[a-zA-Z0-9_-]+/[a-zA-Z0-9_.-]+$ ]]
-            export CAMPUS_UPDATE_MIRROR="https://gitee.com/api/v5/repos/$GITEE_REPOSITORY/releases/latest"
+            export CAMPUS_UPDATE_MIRROR="https://gitee.com/$GITEE_REPOSITORY/raw/master/update.json"
           fi
           bash scripts/build_release.sh "$tag"
           apk="dist/release/$tag/HFUT-Campus-Companion-$version.apk"
@@ -138,6 +144,7 @@ jobs:
           [[ "${#installers[@]}" == 1 ]]
           unzip -p "$apk" "assets/${installers[0]##*/}" | cmp - "${installers[0]}"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo 'signed=true' >> "$GITHUB_OUTPUT"
       - name: Save verified release files
         if: env.SIGNED_BUILD == 'true'
         uses: actions/upload-artifact@v4
@@ -150,7 +157,7 @@ jobs:
           if-no-files-found: error
 
   stage-release:
-    if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.repository.private
+    if: github.event_name == 'push' && github.ref_type == 'tag' && !github.event.repository.private && needs.build.outputs.signed == 'true'
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 12

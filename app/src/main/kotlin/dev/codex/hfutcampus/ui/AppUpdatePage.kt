@@ -20,7 +20,6 @@ internal class AppUpdatePage(
     private var screen: CampusFeePages.Screen? = null
     private var attempted = false
     private var checking = false
-    private var hasPublishedRelease = true
     private var release: AppRelease? = null
     private var apk: File? = null
     private var progress: Int? = null
@@ -63,10 +62,9 @@ internal class AppUpdatePage(
             val result = runCatching(updates::check)
             post {
                 checking = false
-                result.onSuccess { checked ->
-                    if (checked.release != release) apk = null
-                    release = checked.release
-                    hasPublishedRelease = checked.hasPublishedRelease
+                result.onSuccess { latest ->
+                    if (latest != release) apk = null
+                    release = latest
                 }.onFailure { error = "暂时无法检查更新，请稍后重试。" }
                 render()
                 if (automatic && result.isSuccess) showAvailableUpdate()
@@ -163,10 +161,7 @@ internal class AppUpdatePage(
                 val size = String.format(Locale.ROOT, "%.1f MB", latest.bytes / 1_000_000.0)
                 line("发现新版 ${latest.name} · $size", 14, CampusUi.PRIMARY, 8)
             }
-            attempted && error == null -> {
-                val message = if (hasPublishedRelease) "已是最新版本。" else "暂无正式版本。"
-                line(message, 13, CampusUi.MUTED, 8)
-            }
+            attempted && error == null -> line("已是最新版本。", 13, CampusUi.MUTED, 8)
         }
         error?.let { line(it, 13, CampusUi.ERROR, 8) }
         val percent = progress

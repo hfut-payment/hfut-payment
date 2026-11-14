@@ -15,14 +15,16 @@ done
 
 api="https://gitee.com/api/v5/repos/$GITEE_REPOSITORY"
 http=(curl --silent --show-error --proto '=https' --proto-redir '=https' --max-time 180)
-branch=$("${http[@]}" --fail "$api" | jq -er 'select(.private == false) | .default_branch | strings | select(length > 0)')
+branch=$("${http[@]}" --fail --get --data-urlencode "access_token=$GITEE_TOKEN" "$api" \
+  | jq -er 'select(.private == false and .default_branch == "master") | .default_branch')
 tmp=$(mktemp -d)
-trap 'rm -f -- "$tmp/release.json" "$tmp/attachment"; rmdir -- "$tmp"' EXIT
+trap 'rm -f -- "$tmp/release.json" "$tmp/attachment" "$tmp/feed.json"; rmdir -- "$tmp"' EXIT
 release_api="$api/releases"
 title="payfor工大 $tag"
 body="签名 Android 安装包、更新清单、校验文件和对应源码。GitHub 发行说明：https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
 
-status=$("${http[@]}" --output "$tmp/release.json" --write-out '%{http_code}' "$release_api/tags/$tag")
+status=$("${http[@]}" --get --data-urlencode "access_token=$GITEE_TOKEN" \
+  --output "$tmp/release.json" --write-out '%{http_code}' "$release_api/tags/$tag")
 if [[ "$status" == 404 ]] ||
    { [[ "$status" == 200 ]] && jq -e 'type == "null"' "$tmp/release.json" >/dev/null; }; then
   "${http[@]}" --fail --output "$tmp/release.json" --request POST "$release_api" \
@@ -36,9 +38,13 @@ id=$(jq -er '.id | numbers' "$tmp/release.json")
 prerelease=$(jq -r '.prerelease' "$tmp/release.json")
 [[ "$prerelease" == true || "$prerelease" == false ]]
 attachments="$release_api/$id/attach_files"
+download="https://gitee.com/$GITEE_REPOSITORY/releases/download/$tag"
+list_attachments() {
+  "${http[@]}" --fail --get --data-urlencode "access_token=$GITEE_TOKEN" "$attachments"
+}
 for asset in "${assets[@]}"; do
   printf 'Checking Gitee attachment %s\n' "$asset"
-  attached=$("${http[@]}" --fail "$attachments" | jq -r --arg name "$asset" \
+  attached=$(list_attachments | jq -r --arg name "$asset" \
     '.[] | select(.name == $name or .filename == $name) | .id')
   if [[ -z "$attached" ]]; then
     [[ "$prerelease" == true ]] || { printf 'Published Gitee release is missing %s.\n' "$asset" >&2; exit 1; }
@@ -46,24 +52,60 @@ for asset in "${assets[@]}"; do
     "${http[@]}" --http1.1 --fail --request POST "$attachments" --header 'Expect:' --limit-rate 192k \
       --form "access_token=$GITEE_TOKEN" --form "file=@$files/$asset" \
       --output /dev/null --write-out 'Gitee upload HTTP %{response_code}, sent %{size_upload} bytes\n'
-    attached=$("${http[@]}" --fail "$attachments" | jq -r --arg name "$asset" \
+    attached=$(list_attachments | jq -r --arg name "$asset" \
       '.[] | select(.name == $name or .filename == $name) | .id')
   fi
   [[ "$attached" =~ ^[0-9]+$ ]]
   printf 'Verifying anonymous download of %s\n' "$asset"
-  "${http[@]}" --fail --location --output "$tmp/attachment" "$attachments/$attached/download"
+  "${http[@]}" --fail --location --output "$tmp/attachment" "$download/$asset"
   cmp "$files/$asset" "$tmp/attachment"
 done
 
-if [[ "$prerelease" == true ]]; then
+require_latest() {
   latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
   if [[ "$latest" != "$tag" ]]; then
     printf 'A newer stable release is available on GitHub (%s).\n' "$latest" >&2
     exit 1
   fi
+}
+
+require_latest
+if [[ "$prerelease" == true ]]; then
   "${http[@]}" --fail --request PATCH "$release_api/$id" \
     --data-urlencode "access_token=$GITEE_TOKEN" --data-urlencode "tag_name=$tag" \
     --data-urlencode "name=$title" --data-urlencode "body=$body" \
     --data 'prerelease=false' | jq -e '.prerelease == false' >/dev/null
 fi
-printf 'Verified Gitee release %s\n' "$tag"
+
+contents="$api/contents/update.json"
+status=$("${http[@]}" --get --data-urlencode "access_token=$GITEE_TOKEN" --data-urlencode "ref=$branch" \
+  --output "$tmp/feed.json" --write-out '%{http_code}' "$contents")
+method=POST
+args=()
+if [[ "$status" == 200 ]]; then
+  old_sha=$(jq -er '.sha | strings' "$tmp/feed.json")
+  jq -er '.content' "$tmp/feed.json" | tr -d '\r\n' | base64 --decode > "$tmp/attachment"
+  if cmp -s "$files/update.json" "$tmp/attachment"; then
+    method=
+  else
+    current=$(jq -er '.versionCode | numbers' "$tmp/attachment")
+    next=$(jq -er '.versionCode | numbers' "$files/update.json")
+    [[ "$current" -lt "$next" ]] || { echo 'Refusing to roll back the public update feed.' >&2; exit 1; }
+    method=PUT
+    args=(--data-urlencode "sha=$old_sha")
+  fi
+elif [[ "$status" != 404 ]]; then
+  printf 'Could not read Gitee update.json (HTTP %s).\n' "$status" >&2
+  exit 1
+fi
+if [[ -n "$method" ]]; then
+  require_latest
+  "${http[@]}" --fail --request "$method" "$contents" \
+    --data-urlencode "access_token=$GITEE_TOKEN" --data-urlencode "branch=$branch" \
+    --data-urlencode "message=Publish Android update $tag" \
+    --data-urlencode "content=$(base64 -w0 "$files/update.json")" "${args[@]}" >/dev/null
+fi
+raw="https://gitee.com/$GITEE_REPOSITORY/raw/$branch/update.json"
+"${http[@]}" --fail --location --header 'Cache-Control: no-cache' --output "$tmp/attachment" "$raw"
+cmp "$files/update.json" "$tmp/attachment"
+printf 'Verified Gitee release %s and its public update feed\n' "$tag"
