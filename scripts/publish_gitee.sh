@@ -58,7 +58,22 @@ for asset in "${assets[@]}"; do
   [[ "$attached" =~ ^[0-9]+$ ]]
   printf 'Verifying anonymous download of %s\n' "$asset"
   "${http[@]}" --fail --location --output "$tmp/attachment" "$download/$asset"
-  cmp "$files/$asset" "$tmp/attachment"
+  if [[ "$asset" == *-source.zip ]]; then
+    python3 - "$files/$asset" "$tmp/attachment" <<'PY'
+import sys
+from zipfile import ZipFile
+
+with ZipFile(sys.argv[1]) as expected, ZipFile(sys.argv[2]) as actual:
+    names = sorted(expected.namelist())
+    if names != sorted(actual.namelist()) or len(names) != len(set(names)):
+        sys.exit("Gitee source archive differs from the tagged source.")
+    for name in names:
+        if expected.read(name) != actual.read(name):
+            sys.exit(f"Gitee source archive content differs: {name}")
+PY
+  else
+    cmp "$files/$asset" "$tmp/attachment"
+  fi
 done
 
 require_latest() {
