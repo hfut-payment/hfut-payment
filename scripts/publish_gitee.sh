@@ -23,7 +23,8 @@ title="payfor工大 $tag"
 body="签名 Android 安装包、更新清单、校验文件和对应源码。GitHub 发行说明：https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag"
 
 status=$("${http[@]}" --output "$tmp/release.json" --write-out '%{http_code}' "$release_api/tags/$tag")
-if [[ "$status" == 404 ]]; then
+if [[ "$status" == 404 ]] ||
+   { [[ "$status" == 200 ]] && jq -e 'type == "null"' "$tmp/release.json" >/dev/null; }; then
   "${http[@]}" --fail --output "$tmp/release.json" --request POST "$release_api" \
     --data-urlencode "access_token=$GITEE_TOKEN" --data-urlencode "tag_name=$tag" \
     --data-urlencode "name=$title" --data-urlencode "body=$body" \
