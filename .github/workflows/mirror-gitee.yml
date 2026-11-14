@@ -9,6 +9,10 @@ on:
         description: Latest published stable tag to retry, for example v2.0.20
         type: string
         required: true
+      verify_only:
+        description: Verify the existing mirror without changing the release or update feed
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -46,9 +50,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/prepare_gitee_release.sh "$RELEASE_TAG" release
+      - name: Save files for a manual Gitee retry
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitee-files-${{ env.RELEASE_TAG }}
+          path: release/
+          if-no-files-found: error
       - name: Publish the same files to Gitee
         env:
           GH_TOKEN: ${{ github.token }}
           GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          VERIFY_ONLY: ${{ inputs.verify_only }}
         run: bash scripts/publish_gitee.sh "$RELEASE_TAG" release

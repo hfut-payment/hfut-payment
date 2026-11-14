@@ -16,16 +16,20 @@ if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
   if [[ "$tag" == *-* ]]; then args+=(--prerelease); fi
   gh release create "$tag" --repo "$GITHUB_REPOSITORY" "${args[@]}"
 fi
-draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+release=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft,assets)
+draft=$(jq -er '.isDraft | tostring' <<< "$release")
+tmp=$(mktemp)
+trap 'rm -f -- "$tmp"' EXIT
 for asset in "$apk" SHA256SUMS.txt update.json; do
-  if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$asset"; then
-    gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --output - | cmp "$files/$asset" -
-  elif [[ "$draft" == true ]]; then
+  if ! jq -e --arg name "$asset" '.assets | any(.name == $name)' <<< "$release" >/dev/null; then
+    if [[ "$draft" != true ]]; then
+      echo 'A published release is incomplete. Inspect it before retrying.' >&2
+      exit 1
+    fi
     gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "$files/$asset"
-  else
-    echo 'A published release is incomplete. Inspect it before retrying.' >&2
-    exit 1
   fi
+  gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --output - > "$tmp"
+  cmp "$files/$asset" "$tmp"
 done
 if [[ "$draft" == true ]]; then
   printf 'Release draft %s is ready for review. Publish it from GitHub Releases.\n' "$tag"

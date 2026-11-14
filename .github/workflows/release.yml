@@ -59,6 +59,7 @@ jobs:
               ':(exclude).github/workflows/release.yml' \
               ':(exclude).github/workflows/mirror-gitee.yml' \
               ':(exclude)scripts/prepare_gitee_release.sh' \
+              ':(exclude)scripts/publish_github.sh' \
               ':(exclude)scripts/publish_gitee.sh'
           fi
       - uses: actions/setup-java@v5

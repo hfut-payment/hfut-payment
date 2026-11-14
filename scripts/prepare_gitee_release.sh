@@ -4,14 +4,8 @@ tag=${1:?Release tag is required}
 files=${2:?Release artifact directory is required}
 repo=${GITHUB_REPOSITORY:?GitHub repository is required}
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-
-release=$(gh release view "$tag" --repo "$repo" --json tagName,isDraft,isPrerelease)
-jq -e --arg tag "$tag" '.tagName == $tag and .isDraft == false and .isPrerelease == false' <<<"$release" >/dev/null
-latest=$(gh api "repos/$repo/releases/latest" --jq .tag_name)
-if [[ "$latest" != "$tag" ]]; then
-  printf '%s is not the current stable release (%s).\n' "$tag" "$latest" >&2
-  exit 1
-fi
+mode=${3:-mirror}
+[[ "$mode" == mirror || "$mode" == verify ]]
 
 commit=$(git rev-parse "refs/tags/$tag^{commit}")
 git merge-base --is-ancestor "$commit" refs/remotes/origin/main
@@ -23,8 +17,17 @@ code=$(sed -n 's/^versionCode=//p' <<<"$properties")
 apk="HFUT-Campus-Companion-$version.apk"
 mkdir -p -- "$files"
 files=$(cd "$files" && pwd)
-gh release download "$tag" --repo "$repo" --dir "$files" \
-  --pattern "$apk" --pattern SHA256SUMS.txt --pattern update.json
+if [[ "$mode" == mirror ]]; then
+  release=$(gh release view "$tag" --repo "$repo" --json tagName,isDraft,isPrerelease)
+  jq -e --arg tag "$tag" '.tagName == $tag and .isDraft == false and .isPrerelease == false' <<<"$release" >/dev/null
+  latest=$(gh api "repos/$repo/releases/latest" --jq .tag_name)
+  if [[ "$latest" != "$tag" ]]; then
+    printf '%s is not the current stable release (%s).\n' "$tag" "$latest" >&2
+    exit 1
+  fi
+  gh release download "$tag" --repo "$repo" --dir "$files" \
+    --pattern "$apk" --pattern SHA256SUMS.txt --pattern update.json
+fi
 sum=$(sha256sum "$files/$apk" | cut -d ' ' -f 1)
 bytes=$(wc -c < "$files/$apk")
 checksum_line=$(tr -d '\r' < "$files/SHA256SUMS.txt")
@@ -38,10 +41,16 @@ jq -e --arg version "$version" --arg apk "$apk" --arg sum "$sum" \
    .apk == $apk and .sha256 == $sum and .bytes == $bytes' "$files/update.json" >/dev/null
 
 sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:?Android SDK is required}}
+native_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -am "$1"; else printf '%s\n' "$1"; fi
+}
 expected=$(git show "$commit:scripts/release-certificate.sha256" | tr -d '\r\n')
 fingerprint=$("$JAVA_HOME/bin/java" -jar "$sdk/build-tools/35.0.0/lib/apksigner.jar" verify --print-certs "$files/$apk" \
-  | awk -F ': ' '/Signer #1 certificate SHA-256 digest/ {print $2}' | tr -d '\r')
+  | awk -F ': ' '/^Signer #[0-9]+ certificate SHA-256 digest:/ {print $2}' | tr -d '\r')
 [[ "$expected" =~ ^[a-f0-9]{64}$ && "$fingerprint" == "$expected" ]]
+badging=$("$sdk/build-tools/35.0.0/aapt" dump badging "$files/$apk")
+grep -F "package: name='dev.codex.hfutcampus' versionCode='$code' versionName='$version'" <<< "$badging" >/dev/null
+if [[ "$mode" == verify ]]; then exit 0; fi
 
 band_commit=$(git show "$commit:band-source.sha" | tr -d '\r\n')
 [[ "$band_commit" =~ ^[a-f0-9]{40}$ ]]
@@ -55,7 +64,14 @@ git -C "$tmp/band" archive --format=tar --prefix="hfut-payment-band-$band_commit
   | tar -xf - -C "$tmp/source"
 (
   cd "$tmp/source"
-  export TZ=UTC
-  find . -type f -print | LC_ALL=C sort \
-    | zip -X -q -@ "$files/HFUT-Campus-Companion-$version-source.zip"
+  "${PYTHON:-python3}" - "$(native_path "$files/HFUT-Campus-Companion-$version-source.zip")" <<'PY'
+import sys
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
+
+with ZipFile(sys.argv[1], "w", compression=ZIP_DEFLATED) as archive:
+    for path in sorted(Path(".").rglob("*")):
+        if path.is_file():
+            archive.write(path, path.as_posix())
+PY
 )
