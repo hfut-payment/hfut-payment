@@ -93,6 +93,10 @@ if [[ "$prerelease" == true ]]; then
 fi
 
 contents="$api/contents/update.json"
+feed_matches_release() {
+  # The web editor may save the same JSON with CRLF line endings.
+  cmp -s <(tr -d '\r' < "$1") "$files/update.json"
+}
 status=$("${http[@]}" --get --data-urlencode "access_token=$GITEE_TOKEN" --data-urlencode "ref=$branch" \
   --output "$tmp/feed.json" --write-out '%{http_code}' "$contents")
 method=POST
@@ -103,7 +107,7 @@ if [[ "$status" == 200 ]] && jq -e '. == [] or . == null' "$tmp/feed.json" >/dev
 elif [[ "$status" == 200 ]]; then
   old_sha=$(jq -er '.sha | strings' "$tmp/feed.json")
   jq -er '.content' "$tmp/feed.json" | tr -d '\r\n' | base64 --decode > "$tmp/attachment"
-  if cmp -s "$files/update.json" "$tmp/attachment"; then
+  if feed_matches_release "$tmp/attachment"; then
     method=
   else
     current=$(jq -er '.versionCode | numbers' "$tmp/attachment")
@@ -125,5 +129,5 @@ if [[ -n "$method" ]]; then
 fi
 raw="https://gitee.com/$GITEE_REPOSITORY/raw/$branch/update.json"
 "${http[@]}" --fail --location --header 'Cache-Control: no-cache' --output "$tmp/attachment" "$raw"
-cmp "$files/update.json" "$tmp/attachment"
+feed_matches_release "$tmp/attachment"
 printf 'Verified Gitee release %s and its public update feed\n' "$tag"
