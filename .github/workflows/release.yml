@@ -35,7 +35,16 @@ jobs:
         run: |
           version=$(sed -n 's/^versionName=//p' version.properties)
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-z0-9.-]+)?$ ]]
-          [[ "$(git rev-parse "refs/tags/v$version^{commit}")" == "$GITHUB_SHA" ]]
+          release_commit=$(git rev-parse "refs/tags/v$version^{commit}")
+          if [[ "$release_commit" != "$GITHUB_SHA" ]]; then
+            git merge-base --is-ancestor "$release_commit" "$GITHUB_SHA"
+            # Distribution fixes can be deployed without retagging a published APK.
+            git diff --quiet "$release_commit" "$GITHUB_SHA" -- . \
+              ':(exclude).github/workflows/release.yml' \
+              ':(exclude).github/workflows/mirror-gitee.yml' \
+              ':(exclude)scripts/prepare_gitee_release.sh' \
+              ':(exclude)scripts/publish_gitee.sh'
+          fi
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

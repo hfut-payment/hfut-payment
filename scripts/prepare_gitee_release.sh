@@ -27,7 +27,11 @@ gh release download "$tag" --repo "$repo" --dir "$files" \
   --pattern "$apk" --pattern SHA256SUMS.txt --pattern update.json
 sum=$(sha256sum "$files/$apk" | cut -d ' ' -f 1)
 bytes=$(wc -c < "$files/$apk")
-printf '%s  %s\n' "$sum" "$apk" | cmp - "$files/SHA256SUMS.txt"
+checksum_line=$(tr -d '\r' < "$files/SHA256SUMS.txt")
+if [[ "$checksum_line" != "$sum  $apk" && "$checksum_line" != "$sum *$apk" ]]; then
+  echo 'The published checksum does not match the APK.' >&2
+  exit 1
+fi
 jq -e --arg version "$version" --arg apk "$apk" --arg sum "$sum" \
   --argjson code "$code" --argjson bytes "$((bytes))" \
   '.schema == 1 and .versionName == $version and .versionCode == $code and
