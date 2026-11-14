@@ -33,7 +33,7 @@
 
 在「设置 → 账户管理」中可管理记住密码与自动登录选项。启用使用统计的版本在每日首次启动时，会发送当日日期及当天生成的随机安装标识，用于基础活跃度统计。上传数据不包含学号、密码、余额、付款码或任何交易内容。完整条款请参阅应用内的「关于与隐私」。
 
-## 源码构建与发版
+## 源码构建
 
 本地构建需准备 Android Studio、JDK 17、Android SDK 36 及 Build Tools 35.0.0。默认构建流程无需依赖小米 SDK 或手环安装包，在项目根目录执行：
 
@@ -55,21 +55,5 @@ node scripts/stage_band_rpk.mjs .sources/band debug
 ```
 
 通过该方式构建的 APK 支持从「设置 → 小米手环」直接导出调试版 RPK。请注意，调试签名与正式签名不同，无法覆盖安装手环上已有的正式版应用。正式发版工作流会使用正式证书从同一份源码编译 RPK，并在验签通过后嵌入主应用 APK。
-
-当前四个关联仓库均处于私有审核阶段，版本号各自独立维护。发版流程如下：
-
-1. 若本次更新包含手环快应用改动，需先在手环仓库完成版本提交，随后更新主仓库的 `band-source.sha` 与 `BuiltInBand` 版本号。
-2. 修改 `version.properties` 中的 `versionName` 并递增 `versionCode`，提交已审核的代码。
-3. 前往 [Actions](../../actions/workflows/release.yml) 手动触发「Run workflow」，勾选 `signed_candidate` 生成签名候选包（私有审核阶段可从对应运行记录的「Artifacts」中获取）。
-4. 使用候选 APK 覆盖安装旧版本，验证启动与核心功能正常后，在本地 `main` 分支创建附注标签并推送（以 `v2.0.20`、`versionCode=200120` 为例）：
-
-```sh
-git status
-git log -1 --oneline
-git tag -a v2.0.20 -m "Release v2.0.20"
-git push --atomic origin main refs/tags/v2.0.20
-```
-
-仓库公开后，推送版本标签将触发正式构建工作流，验签通过后自动将 APK、校验文件及更新清单发布至 [Releases](../../releases)。
 
 项目使用的第三方开源组件列表及许可说明详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
