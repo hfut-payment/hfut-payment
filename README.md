@@ -5,7 +5,7 @@
 面向合肥工业大学学生的第三方 Android 校园卡客户端。支持出示校园付款码、查询校园卡余额与宿舍费用，并内置小米手环连接功能（Beta）。系统要求 Android 8.0 及以上。
 
 > [!IMPORTANT]
-> **非官方项目声明：本项目由个人维护，与合肥工业大学及校园服务提供方无关，仅供学习交流与自愿试用。**
+> **非官方项目声明：本项目与合肥工业大学及校园服务提供方无关，仅供学习交流与自愿试用。**
 > * **网络传输风险**：部分校园服务接口采用明文 HTTP 协议传输，使用前请充分了解账号凭据及付款码在网络传输过程中的潜在风险。
 > * **账单与扣款核对**：涉及扣款、到账或待圈存金额时，均以校方账单记录为准。若充值后提示结果未确认，请先核对校方账单，避免重复支付。
 > * **试用风险**：软件按「现状」提供。请自行评估并决定是否使用，在适用法律允许的范围内自行承担试用风险；依法不得免除的责任不受本声明影响。
@@ -43,7 +43,7 @@
 
 Windows 环境请执行 `.\gradlew.bat assembleDebug`。
 
-需安装 Node.js 22 与 Bash（Windows 环境可使用 Git Bash）。在项目根目录依次执行以下命令：
+如需构建带手环功能的 APK，需安装 Node.js 22 与 Bash（Windows 环境可使用 Git Bash）。在项目根目录依次执行以下命令：
 
 ```sh
 git clone https://github.com/hfut-payment/hfut-payment-band.git .sources/band
@@ -56,7 +56,7 @@ node scripts/stage_band_rpk.mjs .sources/band debug
 
 通过该方式构建的 APK 支持从「设置 → 小米手环」直接导出调试版 RPK。请注意，调试签名与正式签名不同，无法覆盖安装手环上已有的正式版应用。正式发版工作流会使用正式证书从同一份源码编译 RPK，并在验签通过后嵌入主应用 APK。
 
-各仓库独立维护版本号。维护者可按下面的步骤发版。
+当前四个关联仓库均处于私有审核阶段，版本号各自独立维护。发版流程如下：
 
 1. 若本次更新包含手环快应用改动，需先在手环仓库完成版本提交，随后更新主仓库的 `band-source.sha` 与 `BuiltInBand` 版本号。
 2. 修改 `version.properties` 中的 `versionName` 并递增 `versionCode`，提交已审核的代码。
@@ -72,4 +72,4 @@ git push --atomic origin main refs/tags/v2.0.20
 
 仓库公开后，推送版本标签将触发正式构建工作流，验签通过后自动将 APK、校验文件及更新清单发布至 [Releases](../../releases)。
 
-项目使用的第三方开源组件列表及许可说明详见 THIRD_PARTY_NOTICES.md。
+项目使用的第三方开源组件列表及许可说明详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
