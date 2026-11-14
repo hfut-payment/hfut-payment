@@ -37,16 +37,20 @@ prerelease=$(jq -r '.prerelease' "$tmp/release.json")
 [[ "$prerelease" == true || "$prerelease" == false ]]
 attachments="$release_api/$id/attach_files"
 for asset in "${assets[@]}"; do
+  printf 'Checking Gitee attachment %s\n' "$asset"
   attached=$("${http[@]}" --fail "$attachments" | jq -r --arg name "$asset" \
     '.[] | select(.name == $name or .filename == $name) | .id')
   if [[ -z "$attached" ]]; then
     [[ "$prerelease" == true ]] || { printf 'Published Gitee release is missing %s.\n' "$asset" >&2; exit 1; }
-    "${http[@]}" --fail --request POST "$attachments" \
-      --form "access_token=$GITEE_TOKEN" --form "file=@$files/$asset" >/dev/null
+    printf 'Uploading %s (%s bytes)\n' "$asset" "$(wc -c < "$files/$asset")"
+    "${http[@]}" --http1.1 --fail --request POST "$attachments" --header 'Expect:' \
+      --form "access_token=$GITEE_TOKEN" --form "file=@$files/$asset" \
+      --output /dev/null --write-out 'Gitee upload HTTP %{response_code}, sent %{size_upload} bytes\n'
     attached=$("${http[@]}" --fail "$attachments" | jq -r --arg name "$asset" \
       '.[] | select(.name == $name or .filename == $name) | .id')
   fi
   [[ "$attached" =~ ^[0-9]+$ ]]
+  printf 'Verifying anonymous download of %s\n' "$asset"
   "${http[@]}" --fail --location --output "$tmp/attachment" "$attachments/$attached/download"
   cmp "$files/$asset" "$tmp/attachment"
 done
