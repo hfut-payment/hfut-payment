@@ -97,7 +97,10 @@ status=$("${http[@]}" --get --data-urlencode "access_token=$GITEE_TOKEN" --data-
   --output "$tmp/feed.json" --write-out '%{http_code}' "$contents")
 method=POST
 args=()
-if [[ "$status" == 200 ]]; then
+if [[ "$status" == 200 ]] && jq -e '. == [] or . == null' "$tmp/feed.json" >/dev/null; then
+  # A missing Gitee path can return HTTP 200 with an empty result.
+  method=POST
+elif [[ "$status" == 200 ]]; then
   old_sha=$(jq -er '.sha | strings' "$tmp/feed.json")
   jq -er '.content' "$tmp/feed.json" | tr -d '\r\n' | base64 --decode > "$tmp/attachment"
   if cmp -s "$files/update.json" "$tmp/attachment"; then
