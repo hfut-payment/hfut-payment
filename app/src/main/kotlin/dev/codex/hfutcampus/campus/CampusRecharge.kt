@@ -19,8 +19,10 @@ internal class CampusRecharge(private val app: Context) {
             .put("unknown", unknown).put("orderId", orderId)
     }
 
-    private data class Card(val actual: Long, val pending: Long?) {
+    internal data class Card(val actual: Long, val pending: Long?) {
         val afterSettlement = pending?.let { actual + it }
+
+        fun canAfford(cents: Int): Boolean = afterSettlement?.let { it >= cents } == true
     }
 
     private val runtime = CampusRuntime.get(app)
@@ -90,9 +92,8 @@ internal class CampusRecharge(private val app: Context) {
         CommunityBudget.checkAvailable(app, approval)
         val session = session(account, revision, alive)
         val card = card(session) ?: return Receipt("暂时无法确认校园卡余额")
-        if (card.actual < approval.cents) return Receipt("校园卡实际余额不足")
         val available = card.afterSettlement ?: return Receipt("暂时无法确认待圈存金额")
-        if (available < approval.cents) return Receipt("计入待圈存后，校园卡余额不足")
+        if (!card.canAfford(approval.cents)) return Receipt("计入待圈存后，校园卡余额不足")
         checkTarget()
         val fee = fee(session, target) ?: return Receipt("暂时无法查询充值账户")
         if (rule != null) {
