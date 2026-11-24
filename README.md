@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/images/app-icon.png" width="96" alt="payfor工大 图标"></p>
+&lt;p align=&quot;center&quot;&gt;&lt;img src=&quot;docs/images/app-icon.png&quot; width=&quot;96&quot; alt=&quot;payfor工大 图标&quot;&gt;&lt;/p&gt;
 
 # payfor工大
 
@@ -22,12 +22,12 @@
 
 ## 安装与基础配置
 
-1. **获取安装包**：使用 Android 8.0 及以上版本的设备，在正式版本发布后前往 [Releases](../../releases) 下载并安装 APK。
+1. **获取安装包**：使用 Android 8.0 及以上版本的设备，前往 [GitHub Releases](https://github.com/hfut-payment/hfut-payment/releases/latest) 或 [Gitee 发行镜像](https://gitee.com/dustbin1415/hfut-payment-release/releases) 下载并安装 APK。
 2. **登录与出码**：打开应用并使用校园卡账号登录，首页默认展示校园付款码。
 3. **配置校区与绑定信息**：点击「校园费用」区域右上角的齿轮图标切换校区。查询电费需选择对应的楼栋与宿舍号；宣城校区查询洗浴余额需填写已绑定的手机号。
 4. **查看明细与隐私遮挡**：点击各费用卡片可查看账单明细或发起手动充值。点击费用区右上角的眼睛图标，可临时隐藏首页显示的金额。
 
-**应用更新机制**：配置了更新源的正式版每次进入前台时会自动检查更新。检测到新版本并下载后，应用将在本地校验安装包完整性与数字签名，校验通过后调起 Android 系统安装器完成确认。更新源随正式发布包配置（Gitee 作为可选镜像源，目前尚未上线）。
+**应用更新机制**：配置了更新源的正式版每次进入前台时会自动检查更新。检测到新版本并下载后，应用将在本地校验安装包完整性与数字签名，校验通过后调起 Android 系统安装器完成确认。更新源随正式发布包配置，[Gitee 发行镜像](https://gitee.com/dustbin1415/hfut-payment-release/releases) 已上线作为可选下载镜像。
 
 ## 隐私与统计说明
 
@@ -56,4 +56,11 @@ node scripts/stage_band_rpk.mjs .sources/band debug
 
 通过该方式构建的 APK 支持从「设置 → 小米手环」直接导出调试版 RPK。请注意，调试签名与正式签名不同，无法覆盖安装手环上已有的正式版应用。正式发版工作流会使用正式证书从同一份源码编译 RPK，并在验签通过后嵌入主应用 APK。
 
-项目使用的第三方开源组件列表及许可说明详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+## 开源许可证与第三方来源
+
+本项目主应用代码采用 AGPL-3.0 协议开源，详见 [LICENSE](https://www.google.com/search?q=LICENSE)。项目所涉及的第三方开源组件、设备 SDK 及外部资源分别遵循各自原有的许可协议与使用条款，不统一适用 AGPL-3.0；完整清单及许可说明请参阅 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+- **功能实现参考**：感谢 [聚在工大（Chiu-xaH/HFUT-Schedule）](https://github.com/Chiu-xaH/HFUT-Schedule)。本项目在开发过程中查阅并参考了其开源实现与文档，涉及宿舍电费接口与房间选择、洗浴余额换算，以及校园卡账单字段与分页处理。
+- **交互设计参考**：部分页面转场效果参考了 [SharedNav](https://github.com/Chiu-xaH/SharedNav) 的设计思路，本项目基于 Android Views 实现，不作为运行时依赖引入。
+- **改编组件与设备 SDK**：手环连接流程中使用了基于 [SimpleFetch-Android-Bridge](https://github.com/midi-HL/SimpleFetch-Android-Bridge) 改编的实现；其余第三方组件明细见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。小米相关设备 SDK 遵循其单独的条款与协议。
+
