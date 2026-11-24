@@ -1,4 +1,4 @@
-&lt;p align=&quot;center&quot;&gt;&lt;img src=&quot;docs/images/app-icon.png&quot; width=&quot;96&quot; alt=&quot;payfor工大 图标&quot;&gt;&lt;/p&gt;
+<p align="center"><img src="docs/images/app-icon.png" width="96" alt="payfor工大 图标"></p>
 
 # payfor工大
 
