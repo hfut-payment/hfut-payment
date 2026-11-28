@@ -37,11 +37,18 @@ jobs:
         env:
           SIGNING_KEY: ${{ secrets.HFUT_SIGNING_P12_B64 }}
           SIGNING_PASSWORD: ${{ secrets.HFUT_SIGNING_PASSWORD }}
+          CAMPUS_USAGE_URL: ${{ vars.CAMPUS_USAGE_URL }}
+          CAMPUS_USAGE_PUBLISHABLE_KEY: ${{ vars.CAMPUS_USAGE_PUBLISHABLE_KEY }}
         run: |
           [[ -n "$SIGNING_KEY" && -n "$SIGNING_PASSWORD" ]] || {
             echo '::error::Set Actions secrets HFUT_SIGNING_P12_B64 and HFUT_SIGNING_PASSWORD to build a signed release.'
             exit 1
           }
+          if [[ ! "$CAMPUS_USAGE_URL" =~ ^https://[a-z0-9]+\.supabase\.co$ ||
+                ! "$CAMPUS_USAGE_PUBLISHABLE_KEY" =~ ^sb_publishable_[A-Za-z0-9_-]+$ ]]; then
+            echo '::error::Set Actions variables CAMPUS_USAGE_URL and CAMPUS_USAGE_PUBLISHABLE_KEY to enable daily usage in signed releases.'
+            exit 1
+          fi
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$GITHUB_REF" != refs/heads/main ]]; then
             echo '::error::Select main for a signed candidate.'
             exit 1
@@ -141,6 +148,20 @@ jobs:
           fi
           bash scripts/build_release.sh "$tag"
           apk="dist/release/$tag/HFUT-Campus-Companion-$version.apk"
+          python3 - "$apk" <<'PY'
+          import os
+          import sys
+          from zipfile import ZipFile
+
+          with ZipFile(sys.argv[1]) as apk:
+              dex = [apk.read(name) for name in apk.namelist()
+                     if name.startswith("classes") and name.endswith(".dex")]
+          for name in ("CAMPUS_USAGE_URL", "CAMPUS_USAGE_PUBLISHABLE_KEY"):
+              value = os.environ[name].encode("ascii")
+              if not any(value in part for part in dex):
+                  sys.exit(f"::error::{name} is missing from the signed APK.")
+          print("Verified daily usage configuration in the signed APK.")
+          PY
           shopt -s nullglob
           installers=(app/src/withBand/assets/HFUT-Campus-Band-*.rpk)
           [[ "${#installers[@]}" == 1 ]]
