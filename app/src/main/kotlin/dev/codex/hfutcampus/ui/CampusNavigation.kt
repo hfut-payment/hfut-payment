@@ -64,7 +64,8 @@ class CampusNavigation(
     }
 
     private class Surface(activity: Activity) : FrameLayout(activity) {
-        private var visibleHeight = Int.MAX_VALUE
+        // Only transitions carry a fixed clip. Settled pages follow the current window height.
+        private var visibleHeight: Int? = null
         private var corner = 0f
         private val fill = ColorDrawable(CampusUi.BG)
         init {
@@ -73,11 +74,11 @@ class CampusNavigation(
             outlineProvider = object : ViewOutlineProvider() {
                 override fun getOutline(view: View, outline: Outline) {
                     if (width > 0 && height > 0) outline.setRoundRect(
-                        0, 0, width, visibleHeight.coerceIn(1, height), corner)
+                        0, 0, width, visibleHeight?.coerceIn(1, height) ?: height, corner)
                 }
             }
         }
-        fun shape(height: Int, rounding: Float, color: Int) {
+        fun shape(height: Int?, rounding: Float, color: Int) {
             fill.color = color
             if (visibleHeight != height || corner != rounding) {
                 visibleHeight = height
@@ -244,7 +245,7 @@ class CampusNavigation(
             incoming.translationX = x - visibleWidth / 2f - host.paddingLeft
             incoming.translationY = y - visibleHeight / 2f - host.paddingTop
             val content = if (entry != null) smooth((fraction - .38f) / .34f) else smooth((fraction - .21f) / .52f)
-            incoming.shape((visibleHeight / scale).roundToInt(),
+            incoming.shape(if (fraction == 1f) null else (visibleHeight / scale).roundToInt(),
                 lerp(anchor.corner * liftedScale, 0f, growth) / scale,
                 colors.evaluate(content, anchor.color, CampusUi.BG) as Int)
             incoming.alpha = if (entry != null) smooth((fraction - .21f) / .16f) else smooth(fraction / .14f)
@@ -264,7 +265,8 @@ class CampusNavigation(
             incoming.scaleY = scale
             incoming.translationX = width * (1f - scale) / 2
             incoming.translationY = height * (1f - scale) / 2
-            incoming.shape(height, CampusUi.dp(activity, 20f) * (1f - fraction), CampusUi.BG)
+            incoming.shape(if (fraction == 1f) null else height,
+                CampusUi.dp(activity, 20f) * (1f - fraction), CampusUi.BG)
             incoming.alpha = smooth(fraction)
             page.view.alpha = 1f
         }
@@ -324,6 +326,7 @@ class CampusNavigation(
     private fun reset(view: View) {
         view.alpha = 1f; view.scaleX = 1f; view.scaleY = 1f
         view.translationX = 0f; view.translationY = 0f
+        if (view is Surface) view.shape(null, 0f, CampusUi.BG)
         if (Build.VERSION.SDK_INT >= 31) setBlur(view, 0)
         view.invalidateOutline()
     }
